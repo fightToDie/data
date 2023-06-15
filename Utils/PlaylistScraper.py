@@ -11,10 +11,10 @@ SCOPE = ['user-library-read',
          'playlist-read-collaborative',
          'playlist-modify-public',
          'playlist-modify-private']
-#USER_ID = '	31itojgy5yhdtj4u6ej6zhwgi7oe'
-REDIRECT_URI = 'http://localhost:3000'
-CLIENT_ID = '48a6aeac07b3427698edf6628cf93548'
-CLIENT_SECRET = '7d258986e8a0464b93ab011768d1282f'
+#USER_ID = '	'
+REDIRECT_URI = ''
+CLIENT_ID = ''
+CLIENT_SECRET = ''
 auth_manager = SpotifyOAuth(
     scope=SCOPE,
     #username=USER_ID,
