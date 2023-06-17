@@ -255,12 +255,13 @@ class MessageProducer:
             print("error:::::", e)
             return e
 
-print("Running main.py " + sys.argv[1])
-
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
 #search_category = sys.argv[1]
 search_category = 'hip-hop'
+
+print("Running PlaylistScraper.py " + search_category)
+
 categories = get_playlists_with_keyword(search_category)
 playlists = get_songs(categories)
 
