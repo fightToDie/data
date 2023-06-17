@@ -1,7 +1,8 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
-import json, re, sys, os
-import confluent_kafka
+import json, re, os, sys
+import configparser
+from kafka import KafkaProducer
 from datetime import datetime
 
 SCOPE = ['user-library-read',
@@ -11,10 +12,15 @@ SCOPE = ['user-library-read',
          'playlist-read-collaborative',
          'playlist-modify-public',
          'playlist-modify-private']
-#USER_ID = '	'
-REDIRECT_URI = ''
-CLIENT_ID = ''
-CLIENT_SECRET = ''
+
+properties = configparser.ConfigParser()
+properties.read('../config.ini')
+
+USER_ID = properties.get('CONFIG', 'USER_ID')
+REDIRECT_URI = properties.get('CONFIG', 'REDIRECT_URI')
+CLIENT_ID = properties.get('CONFIG', 'CLIENT_ID')
+CLIENT_SECRET = properties.get('CONFIG', 'CLIENT_SECRET')
+
 auth_manager = SpotifyOAuth(
     scope=SCOPE,
     #username=USER_ID,
@@ -111,6 +117,8 @@ schema = {
   "required": ["playlists"]
 }
 
+#Collector Section
+
 def get_categories(search_category):
     try:
         sp = spotipy.Spotify(auth_manager=auth_manager)
@@ -145,12 +153,13 @@ def get_categories(search_category):
     except Exception as e:
         print('Failed to upload to call get_categories: ' + str(e))
 
-def get_playlists_with_keyword(keyword, limit):
+def get_playlists_with_keyword(keyword):
     playlists = []
     offset = 0
     total = 0
+    cnt = 0
 
-    while total < limit:
+    while True:
         results = sp.search(q=keyword, type='playlist', limit=50, offset=offset)
         items = results['playlists']['items']
         playlists.extend(items)
@@ -160,10 +169,10 @@ def get_playlists_with_keyword(keyword, limit):
         if len(items) < 50:
             break
 
-    return playlists[:limit]
+    return playlists
 
 def get_songs(categories):
-    try:
+    #try:
         sp = spotipy.Spotify(auth_manager=auth_manager)
         playlists = []
         playlist_id_set = set()
@@ -171,12 +180,13 @@ def get_songs(categories):
         for category in categories:
             if category is None:
                 break
-            playlist_id = category['playlist_id']
+            playlist_id = category['id']
+
             results = sp.playlist(playlist_id=playlist_id)
             pos = 0
             tracks = []
             album_ids = set()
-            modified_at = '1970-01-01T00:00:00Z'
+            modified_at = '2006-04-23T00:00:00Z'
 
             if results['id'] in playlist_id_set:
                 continue
@@ -216,21 +226,63 @@ def get_songs(categories):
             })
 
         return playlists
-    except Exception as e:
-        print('Failed to upload to call get_songs: ' + str(e))
+    #except Exception as e:
+        #print('Failed to upload to call get_songs: ' + str(e))
 
-print("Running main.py")
+#Producer Section
+class MessageProducer:
+    broker = ""
+    topic = ""
+    producer = None
+
+    def __init__(self, broker, topic):
+        self.broker = broker
+        self.topic = topic
+        self.producer = KafkaProducer(bootstrap_servers=self.broker,
+                                      value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+                                      acks=1,
+                                      api_version=(2, 5, 0),
+                                      retries=3
+                                      )
+
+    def send_message(self, msg):
+        try:
+            future = self.producer.send(self.topic, msg)
+            self.producer.flush()   # 비우는 작업
+            future.get(timeout=60)
+            return {'status_code': 200, 'error': None}
+        except Exception as e:
+            print("error:::::", e)
+            return e
+
+print("Running main.py " + sys.argv[1])
 
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
-search_category = sys.argv[1]
-categories = get_categories(search_category)
+#search_category = sys.argv[1]
+search_category = 'hip-hop'
+categories = get_playlists_with_keyword(search_category)
 playlists = get_songs(categories)
 
-output_file_name = sys.argv[1]
+print("Found " + len(playlists) + " playlists.")
+exit(0)
+
+#kafka producing
+broker = 'localhost:9092'
+#switch to 0th arg of sys
+topic = search_category
+message_producer = MessageProducer(broker, topic)
+
+for i in range(len(playlists)):
+    message_producer.send_message(playlists[i])
+
+"""
+#json file generator
+output_file_name = search_category
 output_file_path = os.path.join('D:', output_file_name + '.json')
 
 with open(output_file_path, 'w') as file:
     json.dump({'playlists': playlists}, file)
+"""
 
 #validate(instance = json.loads(playlists), schema = schema)
