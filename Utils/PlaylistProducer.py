@@ -1,4 +1,5 @@
 from kafka import KafkaProducer
+import json
 
 #Producer Section
 class MessageProducer:
